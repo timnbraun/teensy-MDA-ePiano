@@ -134,6 +134,14 @@ BUILDDIR = build
 # Settings below this point usually do not need to be edited
 #************************************************************************
 
+# Generate a version string from git for the C++ code to use
+GIT_DIRTY := $(shell test -n "`git diff-index --name-only HEAD`" && echo '-dirty')
+GIT_VERSION := $(shell git describe --tags || echo -n 'V0.NO-GIT')$(GIT_DIRTY)
+
+BUILD_DATE := $(shell date '+%y/%m/%d')
+CDEFINES += -DMDA_EP_VERSION=\"${GIT_VERSION}\" -DBUILD_DATE=\"${BUILD_DATE}\"
+
+
 # CPPFLAGS = compiler options for C and C++
 CPPFLAGS = -Wall -g -O2 $(CPUOPTIONS) -MMD $(OPTIONS) \
 	-I${COREPATH} -I. \
@@ -195,7 +203,8 @@ LIBS := -L$(LIBDIR) $(subst lib/lib,-l,$(LIB_LIST:.a=)) $(LIBS)
 all: $(addprefix ${BUILDDIR}/,$(TARGET).hex)
 
 ${BUILDDIR}/$(TARGET).elf: $(OBJS) | ${LIB_LIST} ${BUILDDIR} $(MCU_LD)
-	$(LINK.o) -o $@ $^ $(LIBS)
+	@$(LINK.o) -o $@ $^ $(LIBS)
+	@echo built $@ ${GIT_VERSION}
 
 ${BUILDDIR}/%.hex: ${BUILDDIR}/%.elf
 	@echo
@@ -351,6 +360,5 @@ $(LIBOBJDIR)/%.o : $(HARDWAREROOT)/cores/${PLATFORM}/%.c | $(LIBOBJDIR)
 	@$(COMPILE.c) $(OUTPUT_OPTION) $<
 
 $(CORE_LIB): $(CORE_OBJ) | ${LIBDIR}
-	@echo CORE_SRC_CPP = ${CORE_SRC_CPP}
 	@echo Collecting library $@ from ${HARDWAREROOT}/cores/${PLATFORM}
 	@$(AR) $(ARFLAGS) $@ $^
