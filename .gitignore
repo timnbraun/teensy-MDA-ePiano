@@ -1,6 +1,12 @@
 # Generated source
 AudioSampleKiddykick.*
 
+# Data extraction utilities
+get_sample_data
+get_sample_size
+piano.dat
+piano-xfade.dat
+
 # Editor cruft
 *.swp
 

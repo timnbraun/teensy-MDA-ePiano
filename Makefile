@@ -454,10 +454,13 @@ $(CORE_LIB): $(CORE_OBJ) | ${LIBDIR}
 	@echo Collecting library $@ from ${CORE_SRC_PATH}
 	@$(AR) $(ARFLAGS) $@ $^
 
-CINCLUDES += $(addprefix -I../../Arduino/libraries/,${USER_LIBRARIES})
-get_sample_data : get_sample_data.cpp
-	@echo HOSTCC = ${HOSTCC}
-	g++ $(CXXFLAGS) -I. $(CINCLUDES) $(OUTPUT_OPTION) $<
+get_sample_data get_sample_size: \
+	CINCLUDES += $(addprefix -I../../Arduino/libraries/,${USER_LIBRARIES}) -Ifake_arduino
+get_sample_data get_sample_size: \
+	CDEFINES += -DARDUINO_TEENSY40
+
+% : utility/%.cpp
+	g++ $(CXXFLAGS) $(CDEFINES) $(CINCLUDES) $(OUTPUT_OPTION) $<
 
 
 ifeq (1,0)
