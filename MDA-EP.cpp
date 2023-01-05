@@ -27,8 +27,14 @@ usb_serial_class		 Serial;
 #define EP_VOICES 2
 #define AUDIO_BUFFERS 4
 #else
+
+#if defined(ARDUINO_TEENSY32)
+#define USE_SINE
+#endif
+
 #define EP_VOICES 16
 #define AUDIO_BUFFERS 16
+
 #endif
 #if defined(USE_SINE)
 AudioSynthSine   		 ep;
@@ -118,6 +124,8 @@ void loop()
 		digitalToggleFast(LED_BUILTIN);
 		since_blink = 0;
 	}
+
+	usbMIDI.read();
 }
 
 void onNoteOn(byte chan, byte note, byte vel)
