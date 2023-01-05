@@ -1,7 +1,8 @@
 # Teensyduino MDA-EPiano
 #
 #  Tim Braun 22/12/28
-#    Support compiling for teensy4, teensy35, and teensy3 targets
+#    Support compiling for teensy4, teensy35, teensy3, and teensyLC platforms
+#
 #    - only teensy4 has the flash space required for the samples
 #
 # Copyright (c) 2022 Tim Braun, Obnoxious Music
@@ -49,9 +50,27 @@ MCU_LD   = ${COREPATH}/imxrt1062.ld
 endif
 
 # Use these lines for Teensy 4.1
-#MCU = IMXRT1062
-# MCU_LD = imxrt1062_t41.ld
-#MCU_DEF = ARDUINO_TEENSY41
+ifeq ($(PLATFORM),teensy41)
+MCU      := IMXRT1062
+MCU_DEF  := ARDUINO_TEENSY41
+CORE     := teensy4
+OPTIONS  := -DF_CPU=600000000
+CPUOPTIONS = -mfloat-abi=hard -mfpu=fpv5-d16
+LIBS     += -larm_cortexM7lfsp_math
+MCU_LD    = ${COREPATH}/imxrt1062_t41.ld
+endif
+
+ifeq ($(PLATFORM),teensy35)
+MCU     := MK64FX512
+MCU_DEF := ARDUINO_TEENSY35
+CORE    := teensy3
+OPTIONS := -DF_CPU=120000000
+CPUOPTIONS = -mfloat-abi=hard -mfpu=fpv5-d16
+CPUARCH := cortex-m4
+LIBS     = -larm_cortexM4lf_math
+MCU_LD   = ${COREPATH}/mk64fx512.ld
+MCULDFLAGS = -Wl,--defsym=__rtc_localtime=0
+endif
 
 ifeq ($(PLATFORM),teensy3)
 MCU     := MK20DX256
@@ -78,18 +97,6 @@ LIBS     += -larm_cortexM0l_math
 MCU_LD   = ${COREPATH}/mkl26z64.ld
 MCULDFLAGS = -Wl,--defsym=__rtc_localtime=0
 SPECS    = --specs=nano.specs
-endif
-
-ifeq ($(PLATFORM),teensy35)
-MCU     := MK64FX512
-MCU_DEF := ARDUINO_TEENSY35
-CORE    := teensy3
-OPTIONS := -DF_CPU=120000000
-CPUOPTIONS = -mfloat-abi=hard -mfpu=fpv5-d16
-CPUARCH := cortex-m4
-LIBS     = -larm_cortexM4lf_math
-MCU_LD   = ${COREPATH}/mk64fx512.ld
-MCULDFLAGS = -Wl,--defsym=__rtc_localtime=0
 endif
 
 # MCU=MK66FX1M0
@@ -224,6 +231,7 @@ LIBS     += -lm -lstdc++
 
 LIBRARIES = SD/src SdFat/src SerialFlash SPI Wire
 USER_LIBRARIES = Synth_MDA_EPiano/src
+LOCALTEENSY_LIBRARIES = Audio
 
 CORE_LIB   ?= $(LIBDIR)/libCore.a
 AUDIO_LIB  := $(LIBDIR)/libAudio.a
@@ -239,7 +247,7 @@ LIB_LIST   = $(AUDIO_LIB) $(SERIALFLASH_LIB) \
 LIBS := -L$(LIBDIR) $(subst ${LIBDIR}/lib,-l,$(LIB_LIST:.a=)) $(LIBS)
 
 CPPFLAGS += -I${COREPATH}
-CPPFLAGS += -I${MYTEENSYDUINOPATH}/Audio
+CPPFLAGS += $(addprefix -I${MYTEENSYDUINOPATH}/,${LOCALTEENSY_LIBRARIES})
 CPPFLAGS += $(addprefix -I${LIBRARYPATH}/,${LIBRARIES})
 CPPFLAGS += $(addprefix -I../../Arduino/libraries/,${USER_LIBRARIES})
 
@@ -283,11 +291,11 @@ ifneq (,$(wildcard $(TEENSYTOOLSPATH)/__FALSE__))
 endif
 
 $(OBJDIR)/%.o : %.c | ${OBJDIR}
-	@echo Building $@ from $<
+	@echo Compiling $@ from $<
 	@$(COMPILE.c) $(OUTPUT_OPTION) $<
 
 $(OBJDIR)/%.o : %.cpp | ${OBJDIR}
-	@echo Building $@ from $<
+	@echo Compiling $@ from $<
 	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
 
 # compiler generated dependency info
@@ -295,7 +303,7 @@ $(OBJDIR)/%.o : %.cpp | ${OBJDIR}
 # -include $(wildcard $(OBJDIR)/*.d)
 -include $(wildcard $(LIBOBJDIR)/*.d)
 
-$(OBJDIR) $(LIBDIR) $(LIBOBJDIR) $(BUILDDIR) : ; $(MKDIR) $@
+$(OBJDIR) $(LIBDIR) $(LIBOBJDIR) $(BUILDDIR) : ; @$(MKDIR) $@
 $(LIB_LIST) : | $(LIBDIR)
 
 allclean:
@@ -327,6 +335,9 @@ upload load : ${BUILDDIR}/$(TARGET).hex
 #
 ######################################
 
+G := "\033[0;32m"
+CLR := "\033[0m"
+
 AUDIO_LIB_CPP_FILES = control_sgtl5000.cpp effect_multiply.cpp filter_biquad.cpp \
 	imxrt_hw.cpp mixer.cpp output_i2s.cpp output_pt8211.cpp play_memory.cpp \
 	synth_dc.cpp synth_simple_drum.cpp synth_sine.cpp synth_whitenoise.cpp
@@ -354,25 +365,26 @@ $(LIBOBJDIR)/%.o : $(AUDIO_LIB_PATH)/utility/%.cpp | $(LIBOBJDIR)
 	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
 
 $(AUDIO_LIB): $(AUDIO_OBJS) | ${LIBDIR}
-	@echo Collecting library $@ from ${AUDIO_LIB_PATH}
+	@echo ${G}"\n"Collecting library $@ from ${AUDIO_LIB_PATH}${CLR}"\n"
 	@$(AR) $(ARFLAGS) $@ $^
 
 SD_LIB_CPP_FILES := SD.cpp
 SD_OBJS := $(addprefix $(LIBOBJDIR)/,$(SD_LIB_CPP_FILES:.cpp=.o))
 SD_LIB_PATH := ${LIBRARYPATH}/SD/src
-${SD_OBJS}: CPPFLAGS += -I${HARDWAREROOT}/libraries/SdFat/src \
+${SD_OBJS}: CPPFLAGS += \
 	-I${SD_LIB_PATH}/utility
 
 $(LIBOBJDIR)/%.o : ${SD_LIB_PATH}/%.cpp
-	@echo Compiling $@ from $<
+	@echo Compiling $@ from $(subst ${HARDWAREROOT}/,,$<)
 	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
 
 $(LIBOBJDIR)/%.o : ${SD_LIB_PATH}/utility/%.cpp
-	@echo Compiling $@ from $<
+	@echo Compiling $@ from $(subst ${HARDWAREROOT}/,,$<)
 	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
 
 $(SD_LIB): $(SD_OBJS) | ${LIBDIR}
-	@echo Collecting library $@ from ${SD_LIB_PATH}
+	@echo ${G}"\n"Collecting library $@ from \
+		$(subst ${HARDWAREROOT}/,,${SD_LIB_PATH})${CLR}"\n"
 	@$(AR) $(ARFLAGS) $@ $^
 
 SDFAT_LIB_CPP_FILES := FreeStack.cpp
@@ -380,11 +392,12 @@ SDFAT_OBJS := $(addprefix $(LIBOBJDIR)/,$(SD_LIB_CPP_FILES:.cpp=.o))
 SDFAT_LIB_PATH := ${LIBRARYPATH}/SdFat/src
 
 $(LIBOBJDIR)/%.o : ${SDFAT_LIB_PATH}/%.cpp
-	@echo Compiling $@ from $<
+	@echo Compiling $@ from $(subst ${HARDWAREROOT}/,,$<)
 	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
 
 $(SDFAT_LIB): $(SDFAT_OBJS) | ${LIBDIR}
-	@echo Collecting library $@ from ${SDFAT_LIB_PATH}
+	@echo ${G}"\n"Collecting library $@ from \
+		$(subst ${HARDWAREROOT}/,,${SDFAT_LIB_PATH})${CLR}"\n"
 	@$(AR) $(ARFLAGS) $@ $^
 
 SERIALFLASH_LIB_CPP_FILES := SerialFlashChip.cpp SerialFlashDirectory.cpp
@@ -392,11 +405,12 @@ SERIALFLASH_OBJS := $(addprefix $(LIBOBJDIR)/,$(SERIALFLASH_LIB_CPP_FILES:.cpp=.
 SERIALFLASH_LIB_PATH := ${LIBRARYPATH}/SerialFlash
 
 $(LIBOBJDIR)/%.o : ${SERIALFLASH_LIB_PATH}/%.cpp
-	@echo Compiling $@ from $<
+	@echo Compiling $@ from $(subst ${HARDWAREROOT}/,,$<)
 	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
 
 $(SERIALFLASH_LIB): $(SERIALFLASH_OBJS) | ${LIBDIR}
-	@echo Collecting library $@ from ${SERIALFLASH_LIB_PATH}
+	@echo ${G}"\n"Collecting library $@ from \
+		$(subst ${HARDWAREROOT}/,,${SERIALFLASH_LIB_PATH})${CLR}"\n"
 	@$(AR) $(ARFLAGS) $@ $^
 
 SPI_LIB_CPP_FILES := SPI.cpp
@@ -404,12 +418,27 @@ SPI_OBJS := $(addprefix $(LIBOBJDIR)/,$(SPI_LIB_CPP_FILES:.cpp=.o))
 SPI_LIB_PATH := ${LIBRARYPATH}/SPI
 
 $(LIBOBJDIR)/%.o : ${SPI_LIB_PATH}/%.cpp
-	@echo Compiling $@ from $<
+	@echo Compiling $@ from $(subst ${HARDWAREROOT}/,,$<)
 	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
 
 $(SPI_LIB): $(SPI_OBJS) | ${LIBDIR}
-	@echo Collecting library $@ from ${SPI_LIB_PATH}
+	@echo ${G}"\n"Collecting library $@ from \
+		$(subst ${HARDWAREROOT}/,,${SPI_LIB_PATH})${CLR}"\n"
 	@$(AR) $(ARFLAGS) $@ $^
+
+WIRE_LIB_CPP_FILES := Wire.cpp WireIMXRT.cpp WireKinetis.cpp
+WIRE_OBJS := $(addprefix $(LIBOBJDIR)/,$(WIRE_LIB_CPP_FILES:.cpp=.o))
+WIRE_LIB_PATH := ${LIBRARYPATH}/Wire
+
+$(LIBOBJDIR)/%.o : ${WIRE_LIB_PATH}/%.cpp
+	@echo Compiling $@ from $(subst ${HARDWAREROOT}/,,$<)
+	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
+
+$(WIRE_LIB): $(WIRE_OBJS) | ${LIBDIR}
+	@echo ${G}"\n"Collecting library $@ from \
+		$(subst ${HARDWAREROOT}/,,${WIRE_LIB_PATH})${CLR}"\n"
+	@$(AR) $(ARFLAGS) $@ $^
+
 
 SYNTHMDA_LIB_CPP_FILES := mdaEPiano.cpp
 SYNTHMDA_OBJS := $(addprefix $(LIBOBJDIR)/,$(SYNTHMDA_LIB_CPP_FILES:.cpp=.o))
@@ -420,19 +449,7 @@ $(LIBOBJDIR)/%.o : ${SYNTHMDA_LIB_PATH}/%.cpp
 	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
 
 $(SYNTHMDAEPIANO_LIB): $(SYNTHMDA_OBJS) | ${LIBDIR}
-	@echo Collecting library $@ from ${SYNTHMDA_LIB_PATH}
-	@$(AR) $(ARFLAGS) $@ $^
-
-WIRE_LIB_CPP_FILES := Wire.cpp WireIMXRT.cpp WireKinetis.cpp
-WIRE_OBJS := $(addprefix $(LIBOBJDIR)/,$(WIRE_LIB_CPP_FILES:.cpp=.o))
-WIRE_LIB_PATH := ${LIBRARYPATH}/Wire
-
-$(LIBOBJDIR)/%.o : ${WIRE_LIB_PATH}/%.cpp
-	@echo Compiling $@ from $<
-	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
-
-$(WIRE_LIB): $(WIRE_OBJS) | ${LIBDIR}
-	@echo Collecting library $@ from ${WIRE_LIB_PATH}
+	@echo ${G}"\n"Collecting library $@ from ${SYNTHMDA_LIB_PATH}${CLR}"\n"
 	@$(AR) $(ARFLAGS) $@ $^
 
 CORE_SRC_PATH = ${COREPATH}
@@ -443,15 +460,16 @@ CORE_SRC_S = $(wildcard ${CORE_SRC_PATH}/*.S)
 CORE_OBJ = $(addprefix $(LIBOBJDIR)/,$(notdir $(CORE_SRC_CPP:.cpp=.o) $(CORE_SRC_C:.c=.o)))
 
 $(LIBOBJDIR)/%.o : ${CORE_SRC_PATH}/%.cpp | $(LIBOBJDIR)
-	@echo Compiling $@ from $<
+	@echo Compiling $@ from $(subst ${HARDWAREROOT}/,,$<)
 	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
 
 $(LIBOBJDIR)/%.o : ${CORE_SRC_PATH}/%.c | $(LIBOBJDIR)
-	@echo Building $@ from $(notdir $<)
+	@echo Compiling $@ from $(subst ${HARDWAREROOT}/,,$<)
 	@$(COMPILE.c) $(OUTPUT_OPTION) $<
 
 $(CORE_LIB): $(CORE_OBJ) | ${LIBDIR}
-	@echo Collecting library $@ from ${CORE_SRC_PATH}
+	@echo ${G}"\n"Collecting library $@ from \
+		$(subst ${HARDWAREROOT}/,,${CORE_SRC_PATH})${CLR}"\n"
 	@$(AR) $(ARFLAGS) $@ $^
 
 get_sample_data get_sample_size: \
