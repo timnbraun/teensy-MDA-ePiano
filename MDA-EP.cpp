@@ -1,13 +1,12 @@
 
 #include <Arduino.h>
-#include <usb_dev.h>
 #include <Audio.h>
 #define NPROGS 2
 #define WAVELEN 11240
 #include <synth_mda_epiano.h>
 
 #define dbg(...) \
-	fiprintf(stderr, __VA_ARGS__)
+	Serial.printf( __VA_ARGS__ )
 
 void onNoteOn(byte chan, byte note, byte vel);
 void onNoteOff(byte chan, byte note, byte vel);
@@ -20,54 +19,56 @@ class AudioSynthSine : public AudioSynthWaveformSine
 		void setProgram( uint16_t p ) { frequency(440); };
 };
 
-usb_serial_class		 Serial;
-
 #if defined(ARDUINO_TEENSYLC)
+
 #define USE_SINE
 #define EP_VOICES 2
-#define AUDIO_BUFFERS 4
-#else
+#define NUM_AUDIO_BUFFERS 4
 
-#if defined(ARDUINO_TEENSY32)
+#elif defined(ARDUINO_TEENSY32)
+
 #define USE_SINE
-#endif
-
 #define EP_VOICES 16
-#define AUDIO_BUFFERS 16
+#define NUM_AUDIO_BUFFERS 16
+
+#elif defined(ARDUINO_TEENSY40)
+
+#define EP_VOICES 32
+#define NUM_AUDIO_BUFFERS 64
 
 #endif
+
 #if defined(USE_SINE)
-AudioSynthSine   		 ep;
+AudioSynthSine   		ep;
 #else
-AudioSynthEPiano         ep(EP_VOICES);
+AudioSynthEPiano        ep(EP_VOICES);
 #endif
-AudioOutputI2S           out;
-#define USE_DAC
+AudioOutputI2S          out;
+// #define USE_DAC
 #if defined(USE_DAC)
-AudioControlSGTL5000     dac;
+AudioControlSGTL5000    dac;
 #endif
-AudioConnection          patchCord1(ep, 0, out, 0);
-AudioConnection          patchCord2(ep, 0, out, 1);
+AudioConnection         patchCord1(ep, 0, out, 0);
+AudioConnection         patchCord2(ep, 0, out, 1);
 
-elapsedMillis		since_blink, since_notes;
+elapsedMillis			since_blink, since_notes;
 
 void setup()
 {
 	pinMode(LED_BUILTIN, OUTPUT);
-	usb_init();
-	delay(3000);
 	Serial.begin(115200);
-	while(!Serial);
+	delay(3000);
+	// while(!Serial);
 
 	dbg("\nMDA-EP " VERSION " " BUILD_DATE "\n\n");
+
+	AudioMemory( NUM_AUDIO_BUFFERS );
+	dbg("Audio lib initialized\n");
 
 	// Midi setup
 	usbMIDI.setHandleNoteOn(onNoteOn);
 	usbMIDI.setHandleNoteOff(onNoteOff);
 	delay(100);
-
-	AudioMemory(AUDIO_BUFFERS);
-	dbg("Audio lib initialized\n");
 
 #if defined(USE_DAC)
 	dac.enable();
@@ -80,9 +81,6 @@ void setup()
 #endif
 	delay(100);
 	dbg("dac initialized\n");
-
-	dbg("voice data is %u samples\n", WAVELEN );
-	// dbg("voice data is %u samples\n", sizeof(epianoDataXfade) / sizeof(epianoDataXfade[0]) );
 }
 
 bool notes_are_on = false;
@@ -90,53 +88,68 @@ bool notes_are_on = false;
 void loop()
 {
 	if (since_notes > 4000) {
-		uint8_t x=random(3) + 36;
+		static uint8_t root_note;
 		if (!notes_are_on) {
-			int8_t d=random(40) + 1;
-			uint8_t p=random(NPROGS);
+			int8_t loud = random(40) + 1;
+			uint8_t new_program = random(NPROGS);
+			root_note = random(12) + 36;
 
-			ep.setProgram(p);
+			ep.setProgram( new_program );
 
-			dbg("Key-Down %u %u\n", x, d);
-			ep.noteOn(x, d);
-			// delay(100);
-			// ep.noteOn(4+x, 90+d);
-			// delay(100);
-			// ep.noteOn(7+x, 90+d);
-			// delay(100);
-			// ep.noteOn(12+x, 90+d);
+			dbg("Key-Down %u %u\n", root_note, loud);
+			ep.noteOn(root_note, loud);
+			#if !defined(USE_SINE)
+			delay(100);
+			ep.noteOn(4+root_note, 90+loud);
+			delay(100);
+			ep.noteOn(7+root_note, 90+loud);
+			delay(100);
+			ep.noteOn(12+root_note, 90+loud);
+			#endif
 			notes_are_on = true;
 			since_notes = 2000;
 		}
 		else {
 
-			dbg("Key-Up\n");
-			ep.noteOff(x);
-			// ep.noteOff(4+x);
-			// ep.noteOff(7+x);
-			// ep.noteOff(12+x);
+			dbg("Key-Up %u\n", root_note);
+			ep.noteOff(root_note);
+			#if !defined(USE_SINE)
+			ep.noteOff(4+root_note);
+			ep.noteOff(7+root_note);
+			ep.noteOff(12+root_note);
+			#endif
 			notes_are_on = false;
 			since_notes = 0;
 		}
 	}
 
-	if (since_blink > 5000) {
+	if (since_blink > 2000) {
 		digitalToggleFast(LED_BUILTIN);
 		since_blink = 0;
 	}
 
 	usbMIDI.read();
+
+	switch (Serial.read()) {
+	case 'a':
+		dbg("AudioMemoryUsage() = %u\n", AudioMemoryUsage() );
+	break;
+	case 'i':
+		dbg("an i for an i\n");
+	break;
+	default: ;
+	}
 }
 
 void onNoteOn(byte chan, byte note, byte vel)
 {
 	dbg("N=%u ( %u ) c=%u\n", note, vel, chan);
 
-	ep.noteOn( note, vel );
+	// ep.noteOn( note, vel );
 }
 
 void onNoteOff(byte chan, byte note, byte vel)
 {
 	dbg("N c=%u %u( %u ) off\n", chan, note, vel);
-	ep.noteOff( note );
+	// ep.noteOff( note );
 }

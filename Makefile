@@ -1,4 +1,4 @@
-# Teensyduino MDA-EPiano
+# Teensyduino mda-ePiano
 #
 #  Tim Braun 22/12/28
 #    Support compiling for teensy4, teensy35, teensy3, and teensyLC platforms
@@ -34,7 +34,7 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-PLATFORM ?= teensy3
+PLATFORM ?= teensy4
 
 # Use these lines for Teensy 4.0
 ifeq ($(PLATFORM),teensy4)
@@ -45,8 +45,10 @@ OPTIONS := -DF_CPU=600000000
 # for Cortex M7 with single & double precision FPU
 CPUOPTIONS = -mfloat-abi=hard -mfpu=fpv5-d16
 CPUARCH := cortex-m7
-LIBS     += -larm_cortexM7lfsp_math
+LIBS     += -L${TOOLSPATH}/teensy-compile/5.4.1/arm/arm-none-eabi/lib -larm_cortexM7lfsp_math
 MCU_LD   = ${COREPATH}/imxrt1062.ld
+AUDIO_LIB_PATH = ${LIBRARYPATH}/Audio
+LIBRARIES = Audio
 endif
 
 # Use these lines for Teensy 4.1
@@ -58,6 +60,7 @@ OPTIONS  := -DF_CPU=600000000
 CPUOPTIONS = -mfloat-abi=hard -mfpu=fpv5-d16
 LIBS     += -larm_cortexM7lfsp_math
 MCU_LD    = ${COREPATH}/imxrt1062_t41.ld
+LIBRARIES = Audio
 endif
 
 ifeq ($(PLATFORM),teensy35)
@@ -70,6 +73,7 @@ CPUARCH := cortex-m4
 LIBS     = -larm_cortexM4lf_math
 MCU_LD   = ${COREPATH}/mk64fx512.ld
 MCULDFLAGS = -Wl,--defsym=__rtc_localtime=0
+LIBRARIES = Audio
 endif
 
 ifeq ($(PLATFORM),teensy3)
@@ -82,6 +86,7 @@ CPUARCH := cortex-m4
 LIBS     += -larm_cortexM4l_math
 MCU_LD   = ${COREPATH}/mk20dx256.ld
 MCULDFLAGS = -Wl,--defsym=__rtc_localtime=0
+LIBRARIES = Audio
 endif
 
 ifeq ($(PLATFORM),teensyLC)
@@ -97,6 +102,7 @@ LIBS     += -larm_cortexM0l_math
 MCU_LD   = ${COREPATH}/mkl26z64.ld
 MCULDFLAGS = -Wl,--defsym=__rtc_localtime=0
 SPECS    = --specs=nano.specs
+LOCALTEENSY_LIBRARIES = Audio
 endif
 
 # MCU=MK66FX1M0
@@ -132,7 +138,7 @@ OPTIONS += -DLAYOUT_US_ENGLISH
 #   -DUSB_RAWHID
 #   -DUSB_FLIGHTSIM
 #   -DUSB_FLIGHTSIM_JOYSTICK
-OPTIONS += -DUSB_MIDI_SERIAL
+OPTIONS += -DUSB_MIDI_AUDIO_SERIAL
 
 # options needed by many Arduino libraries to configure for Teensy model
 OPTIONS += -D__$(MCU)__ -DARDUINO=10813 -DTEENSYDUINO=157 -D$(MCU_DEF)
@@ -158,41 +164,24 @@ CPUOPTIONS += -mcpu=${CPUARCH} -mthumb
 # be able to use this Makefile with no Arduino dependency.
 # Please note that if ARDUINOPATH was set, it will override
 # the NO_ARDUINO behaviour.
-ifndef NO_ARDUINO
 # Path to your arduino installation
-ARDUINOPATH ?= ../../.arduino15/packages/teensy
-endif
-
-
-ifdef ARDUINOPATH
-
+ARDUINOPATH  := $(HOME)/.arduino15/packages/teensy
 HARDWAREROOT := $(abspath $(ARDUINOPATH)/hardware/avr/1.57.2)
 
-# path location for Teensy Loader, teensy_post_compile and teensy_reboot (on Linux)
-TOOLSPATH := $(abspath $(ARDUINOPATH)/tools)
-TEENSYTOOLSPATH := $(TOOLSPATH)/teensy-tools/1.57.2
-
 # path location for Arduino libraries
-LIBRARYPATH := $(abspath $(HARDWAREROOT)/libraries)
+LIBRARYPATH  := $(HARDWAREROOT)/libraries
+COREPATH     := $(HARDWAREROOT)/cores/${CORE}
+
+# path location for Teensy Loader, teensy_post_compile and teensy_reboot (on Linux)
+TOOLSPATH    := $(abspath $(ARDUINOPATH)/tools)
+TEENSYTOOLSPATH := $(TOOLSPATH)/teensy-tools/1.57.2
 
 MYTEENSYDUINOPATH := ../teensy-duino
 
-COREPATH := $(abspath $(HARDWAREROOT)/cores/${CORE})
-
-# path location for the arm-none-eabi compiler
-COMPILERPATH = /usr/bin
-
-else
-# Default to the normal GNU/Linux compiler path if NO_ARDUINO
-# and ARDUINOPATH was not set.
-COMPILERPATH ?= /usr/bin
-
-endif
-
-OBJDIR = obj/${PLATFORM}
-LIBDIR = lib/${PLATFORM}
-LIBOBJDIR = ${LIBDIR}/obj
-BUILDDIR = build/${PLATFORM}
+OBJDIR    := obj/${PLATFORM}
+LIBDIR    := lib/${PLATFORM}
+LIBOBJDIR := ${LIBDIR}/obj
+BUILDDIR  := build/${PLATFORM}
 
 #************************************************************************
 # Settings below this point usually do not need to be edited
@@ -222,18 +211,20 @@ CFLAGS = -std=gnu11
 # linker options
 #
 LDFLAGS = -Wl,--gc-sections $(SPECS) $(CPUOPTIONS) \
-	--sysroot=${TOOLSPATH}/teensy-compile/5.4.1/arm/arm-none-eabi \
-	-T$(MCU_LD) -Wl,-Map=$(basename $@).map ${MCULDFLAGS} -Os
+	-T$(MCU_LD) -Wl,-Map=$(basename $@).map ${MCULDFLAGS} -Os \
+	--sysroot=${TOOLSPATH}/teensy-compile/5.4.1/arm
+#	--sysroot=${TOOLSPATH}/teensy-compile/5.4.1/arm/arm-none-eabi/lib/armv7e-m/fpu/fpv5-d16
 
 # additional libraries to link
 # LIBS     := -L${TOOLSPATH}/teensy-compile/5.4.1/arm/arm-none-eabi/lib ${LIBS}
 LIBS     += -lm -lstdc++
 
-LIBRARIES = SD/src SdFat/src SerialFlash SPI Wire
+# $(shell echo $@ ${PLATFORM} ${LIBRARIES})
+LIBRARIES += SD/src SdFat/src SerialFlash SPI Wire
+# $(shell echo $@ ${PLATFORM} ${LIBRARIES})
 USER_LIBRARIES = Synth_MDA_EPiano/src
-LOCALTEENSY_LIBRARIES = Audio
 
-CORE_LIB   ?= $(LIBDIR)/libCore.a
+CORE_LIB   := $(LIBDIR)/libCore.a
 AUDIO_LIB  := $(LIBDIR)/libAudio.a
 SD_LIB     := $(LIBDIR)/libSD.a
 SDFAT_LIB  := $(LIBDIR)/libSdFat.a
@@ -241,20 +232,22 @@ SERIALFLASH_LIB  := $(LIBDIR)/libSerialFlash.a
 SPI_LIB    := $(LIBDIR)/libSPI.a
 SYNTHMDAEPIANO_LIB  := $(LIBDIR)/libSynth_MDA_EPiano.a
 WIRE_LIB   := $(LIBDIR)/libWire.a
-LIB_LIST   = $(AUDIO_LIB) $(SERIALFLASH_LIB) \
+LIB_LIST   := $(AUDIO_LIB) $(SERIALFLASH_LIB) \
 			 $(SPI_LIB) $(SYNTHMDAEPIANO_LIB) $(WIRE_LIB) $(CORE_LIB)
 
 LIBS := -L$(LIBDIR) $(subst ${LIBDIR}/lib,-l,$(LIB_LIST:.a=)) $(LIBS)
 
 CPPFLAGS += -I${COREPATH}
+ifneq (${LOCALTEENSY_LIBRARIES},)
 CPPFLAGS += $(addprefix -I${MYTEENSYDUINOPATH}/,${LOCALTEENSY_LIBRARIES})
+endif
 CPPFLAGS += $(addprefix -I${LIBRARYPATH}/,${LIBRARIES})
 CPPFLAGS += $(addprefix -I../../Arduino/libraries/,${USER_LIBRARIES})
 
 
 # names for the compiler programs
-CROSS_COMPILE := arm-none-eabi-
-# CROSS_COMPILE=${TOOLSPATH}/teensy-compile/5.4.1/arm/bin/arm-none-eabi-
+# CROSS_COMPILE := arm-none-eabi-
+CROSS_COMPILE=${TOOLSPATH}/teensy-compile/5.4.1/arm/bin/arm-none-eabi-
 CC      = $(CROSS_COMPILE)gcc
 CXX     = $(CROSS_COMPILE)g++
 OBJCOPY = $(CROSS_COMPILE)objcopy
@@ -267,13 +260,21 @@ MKDIR   = mkdir -p
 CPP_FILES := MDA-EP.cpp usb_write.cpp
 OBJS := $(addprefix ${OBJDIR}/,$(C_FILES:.c=.o) $(CPP_FILES:.cpp=.o))
 
-# the actual makefile rules (all .o files built by GNU make's default implicit rules)
+# OBJS := crti.o crtbegin.o crt0.o $(OBJS)
+# crti.o crtbegin.o crt0.o libm.a libstdc++.a libgcc.a libg.a libc.a
+SYSROOT := ${TOOLSPATH}/teensy-compile/5.4.1/arm/arm-none-eabi/lib/armv7e-m/fpu/fpv5-d16
+SYSLIBROOT := ${TOOLSPATH}/teensy-compile/5.4.1/arm/lib/gcc/arm-none-eabi/5.4.1/armv7e-m/fpu/fpv5-d16
+# CRT_OBJS := -nostdlib -L$(SYSLIBROOT) $(addprefix ${SYSLIBROOT}/,crti.o crtbegin.o) \
+	$(SYSROOT)/crt0.o
+# LIBS += -lm -lstdc++ -lgcc -lg -lc
 
 .PHONY: all load upload size clean allclean
 all: $(addprefix ${BUILDDIR}/,$(TARGET).hex)
 
+# the actual makefile rules (all .o files built by rules using standard COMPILE.x macros)
+
 ${BUILDDIR}/$(TARGET).elf: $(OBJS) ${LIB_LIST} | ${BUILDDIR} $(MCU_LD)
-	@$(LINK.o) ${OBJS} $(LIBS) -o $@
+	@$(LINK.o) ${CPPFLAGS} ${CRT_OBJS} ${OBJS} $(LIBS) -o $@
 	@echo built $@ ${GIT_VERSION} for ${PLATFORM}
 
 ${BUILDDIR}/%.hex: ${BUILDDIR}/%.elf
@@ -285,6 +286,8 @@ ${BUILDDIR}/%.hex: ${BUILDDIR}/%.elf
 	@echo
 ifneq (,$(wildcard $(TEENSYTOOLSPATH)/__FALSE__))
 	# I don't know what this is trying to do
+	# it seems to want to use teensy_loader_cli but that ain't gonna work
+	# since we don't have access to the serial port
 	$(TEENSYTOOLSPATH)/teensy_post_compile -file=$(basename $@) -path=${BUILDDIR} \
 		-tools=$(TEENSYTOOLSPATH)
 	-$(TEENSYTOOLSPATH)/teensy_reboot
@@ -296,11 +299,12 @@ $(OBJDIR)/%.o : %.c | ${OBJDIR}
 
 $(OBJDIR)/%.o : %.cpp | ${OBJDIR}
 	@echo Compiling $@ from $<
-	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
+	@echo $@ ${PLATFORM} ${LIBRARIES}
+	$(COMPILE.cpp) $(OUTPUT_OPTION) $<
 
 # compiler generated dependency info
--include $(OBJS:.o=.d)
-# -include $(wildcard $(OBJDIR)/*.d)
+# -include $(OBJS:.o=.d)
+-include $(wildcard $(OBJDIR)/*.d)
 -include $(wildcard $(LIBOBJDIR)/*.d)
 
 $(OBJDIR) $(LIBDIR) $(LIBOBJDIR) $(BUILDDIR) : ; @$(MKDIR) $@
@@ -338,19 +342,26 @@ upload load : ${BUILDDIR}/$(TARGET).hex
 G := "\033[0;32m"
 CLR := "\033[0m"
 
-AUDIO_LIB_CPP_FILES = control_sgtl5000.cpp effect_multiply.cpp filter_biquad.cpp \
-	imxrt_hw.cpp mixer.cpp output_i2s.cpp output_pt8211.cpp play_memory.cpp \
-	synth_dc.cpp synth_simple_drum.cpp synth_sine.cpp synth_whitenoise.cpp
+AUDIO_LIB_PATH ?= ${MYTEENSYDUINOPATH}/Audio
+# AUDIO_LIB_PATH := ${LIBRARYPATH}/Audio
+ifeq (${PLATFORM},teensy4)
+AUDIO_LIB_CPP_FILES = $(wildcard ${AUDIO_LIB_PATH}/*.cpp ${AUDIO_LIB_PATH}/utility/*.cpp)
+AUDIO_LIB_C_FILES = $(wildcard ${AUDIO_LIB_PATH}/*.c ${AUDIO_LIB_PATH}/utility/*.c)
+AUDIO_LIB_S_FILES = $(wildcard ${AUDIO_LIB_PATH}/*.S)
+else
+AUDIO_LIB_CPP_FILES = control_sgtl5000.cpp effect_multiply.cpp \
+	filter_biquad.cpp imxrt_hw.cpp mixer.cpp output_i2s.cpp \
+	output_pt8211.cpp play_memory.cpp synth_dc.cpp \
+	synth_simple_drum.cpp synth_sine.cpp synth_whitenoise.cpp
 AUDIO_LIB_C_FILES = data_ulaw.c data_waveforms.c
 AUDIO_LIB_S_FILES = memcpy_audio.S
-AUDIO_OBJS := $(addprefix $(LIBOBJDIR)/,$(AUDIO_LIB_C_FILES:.c=.o) \
-	$(AUDIO_LIB_CPP_FILES:.cpp=.o) $(AUDIO_LIB_S_FILES:.S=.o))
-AUDIO_LIB_PATH := ${MYTEENSYDUINOPATH}/Audio
-# AUDIO_LIB_PATH := ${LIBRARYPATH}/Audio
+endif
+AUDIO_OBJS := $(addprefix $(LIBOBJDIR)/,$(notdir $(AUDIO_LIB_C_FILES:.c=.o) \
+	$(AUDIO_LIB_CPP_FILES:.cpp=.o) $(AUDIO_LIB_S_FILES:.S=.o)))
 
 $(LIBOBJDIR)/%.o : $(AUDIO_LIB_PATH)/%.c | $(LIBOBJDIR)
 	@echo Compiling $@ from $<
-	@$(COMPILE.c) $(OUTPUT_OPTION) $<
+	@$(COMPILE.c) -I${AUDIO_LIB_PATH}/utility $(OUTPUT_OPTION) $<
 
 $(LIBOBJDIR)/%.o : $(AUDIO_LIB_PATH)/%.S | $(LIBOBJDIR)
 	@echo Compiling $@ from $<
@@ -358,11 +369,15 @@ $(LIBOBJDIR)/%.o : $(AUDIO_LIB_PATH)/%.S | $(LIBOBJDIR)
 
 $(LIBOBJDIR)/%.o : $(AUDIO_LIB_PATH)/%.cpp | $(LIBOBJDIR)
 	@echo Compiling $@ from $<
-	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
+	@$(COMPILE.cpp) -I${AUDIO_LIB_PATH}/utility $(OUTPUT_OPTION) $<
 
 $(LIBOBJDIR)/%.o : $(AUDIO_LIB_PATH)/utility/%.cpp | $(LIBOBJDIR)
 	@echo Compiling $@ from $<
 	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
+
+$(LIBOBJDIR)/%.o : $(AUDIO_LIB_PATH)/utility/%.c | $(LIBOBJDIR)
+	@echo Compiling $@ from $<
+	@$(COMPILE.c) -I${AUDIO_LIB_PATH}/utility $(OUTPUT_OPTION) $<
 
 $(AUDIO_LIB): $(AUDIO_OBJS) | ${LIBDIR}
 	@echo ${G}"\n"Collecting library $@ from ${AUDIO_LIB_PATH}${CLR}"\n"
@@ -453,7 +468,7 @@ $(SYNTHMDAEPIANO_LIB): $(SYNTHMDA_OBJS) | ${LIBDIR}
 	@$(AR) $(ARFLAGS) $@ $^
 
 CORE_SRC_PATH = ${COREPATH}
-# CORE_SRC_PATH := ../teensy-duino/src
+# CORE_SRC_PATH := ${MYTEENSYDUINOPATH}/src
 CORE_SRC_CPP = $(wildcard ${CORE_SRC_PATH}/*.cpp)
 CORE_SRC_C = $(wildcard ${CORE_SRC_PATH}/*.c)
 CORE_SRC_S = $(wildcard ${CORE_SRC_PATH}/*.S)
