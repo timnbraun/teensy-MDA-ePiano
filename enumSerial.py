@@ -30,13 +30,23 @@ def print_midi_device_info():
     _print_midi_device_info()
     quit()
 
-def print_serial_device_info():
+def get_serial_device_list(all_the_ports = False):
 	ports = serial.tools.list_ports.comports()
+	port_list = []
+	for p in ports:
+		if p.vid or all_the_ports:
+			port_list.append(p) 
+	return port_list
+
+def print_serial_device_info(all_the_ports = True):
+	ports = get_serial_device_list(all_the_ports)
 	for i in range(len(ports)):
 		if ports[i].vid:
 			vid = int(ports[i].vid)
 		else:
 			vid = 0
+		if (vid == 0 and not all_the_ports):
+			continue
 		print(
 			"%2i: %-8s - :%-21s: 0x%04x"
 			% (i, ports[i].name, ports[i].manufacturer, vid )
@@ -122,5 +132,11 @@ if __name__ == "__main__":
         print_serial_device_info()
     elif "--loop" in sys.argv or "-o" in sys.argv:
         loopit()
-    else:
+    elif "--monitor" in sys.argv or "-m" in sys.argv:
+        dev = get_serial_device_list(False)
+        if dev:
+            print("arduino-cli.exe monitor -p ", dev[0].name)
+    elif "--help" in sys.argv or "-h" in sys.argv:
         usage()
+    else:
+        print_serial_device_info(False)
