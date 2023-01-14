@@ -1,6 +1,7 @@
 
 #include <Arduino.h>
 #include <Audio.h>
+#include <TimedBlink.h>
 #define NPROGS 2
 #define WAVELEN 11240
 #include <synth_mda_epiano.h>
@@ -51,12 +52,15 @@ AudioControlSGTL5000    dac;
 AudioConnection         patchCord1(ep, 0, out, 0);
 AudioConnection         patchCord2(ep, 0, out, 1);
 
+TimedBlink				heart(LED_BUILTIN);
+
 elapsedMillis			since_blink, since_notes;
 
 void setup()
 {
-	pinMode(LED_BUILTIN, OUTPUT);
+	heart.blink(250, 250);
 	Serial.begin(115200);
+	digitalWrite(LED_BUILTIN, HIGH);
 	delay(3000);
 	// while(!Serial);
 
@@ -68,6 +72,7 @@ void setup()
 	// Midi setup
 	usbMIDI.setHandleNoteOn(onNoteOn);
 	usbMIDI.setHandleNoteOff(onNoteOff);
+	digitalWrite(LED_BUILTIN, LOW);
 	delay(100);
 
 #if defined(USE_DAC)
@@ -81,6 +86,7 @@ void setup()
 #endif
 	delay(100);
 	dbg("dac initialized\n");
+	heart.heartbeat( 200, 2000 - (3*200), 2 );
 }
 
 bool notes_are_on = false;
@@ -123,10 +129,13 @@ void loop()
 		}
 	}
 
+#if 0
 	if (since_blink > 2000) {
 		digitalToggleFast(LED_BUILTIN);
 		since_blink = 0;
 	}
+#endif
+	heart.loop();
 
 	usbMIDI.read();
 

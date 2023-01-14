@@ -45,7 +45,8 @@ OPTIONS := -DF_CPU=600000000
 # for Cortex M7 with single & double precision FPU
 CPUOPTIONS = -mfloat-abi=hard -mfpu=fpv5-d16
 CPUARCH := cortex-m7
-LIBS     += -L${TOOLSPATH}/teensy-compile/5.4.1/arm/arm-none-eabi/lib -larm_cortexM7lfsp_math
+# LIBS     += -L${TOOLSPATH}/teensy-compile/5.4.1/arm/arm-none-eabi/lib
+LIBS     += -larm_cortexM7lfsp_math
 MCU_LD   = ${COREPATH}/imxrt1062.ld
 AUDIO_LIB_PATH = ${LIBRARYPATH}/Audio
 LIBRARIES = Audio
@@ -171,6 +172,7 @@ HARDWAREROOT := $(abspath $(ARDUINOPATH)/hardware/avr/1.57.2)
 # path location for Arduino libraries
 LIBRARYPATH  := $(HARDWAREROOT)/libraries
 COREPATH     := $(HARDWAREROOT)/cores/${CORE}
+USERLIBPATH  := $(HOME)/Arduino/libraries
 
 # path location for Teensy Loader, teensy_post_compile and teensy_reboot (on Linux)
 TOOLSPATH    := $(abspath $(ARDUINOPATH)/tools)
@@ -222,17 +224,19 @@ LIBS     += -lm -lstdc++
 # $(shell echo $@ ${PLATFORM} ${LIBRARIES})
 LIBRARIES += SD/src SdFat/src SerialFlash SPI Wire
 # $(shell echo $@ ${PLATFORM} ${LIBRARIES})
-USER_LIBRARIES = Synth_MDA_EPiano/src
+USER_LIBRARIES = Synth_MDA_EPiano/src TimedBlink/src
 
-CORE_LIB   := $(LIBDIR)/libCore.a
-AUDIO_LIB  := $(LIBDIR)/libAudio.a
-SD_LIB     := $(LIBDIR)/libSD.a
-SDFAT_LIB  := $(LIBDIR)/libSdFat.a
+CORE_LIB         := $(LIBDIR)/libCore.a
+AUDIO_LIB        := $(LIBDIR)/libAudio.a
+SD_LIB           := $(LIBDIR)/libSD.a
+SDFAT_LIB        := $(LIBDIR)/libSdFat.a
 SERIALFLASH_LIB  := $(LIBDIR)/libSerialFlash.a
-SPI_LIB    := $(LIBDIR)/libSPI.a
+SPI_LIB          := $(LIBDIR)/libSPI.a
 SYNTHMDAEPIANO_LIB  := $(LIBDIR)/libSynth_MDA_EPiano.a
-WIRE_LIB   := $(LIBDIR)/libWire.a
-LIB_LIST   := $(AUDIO_LIB) $(SERIALFLASH_LIB) \
+WIRE_LIB         := $(LIBDIR)/libWire.a
+TIMEDBLINK_LIB   := $(LIBDIR)/libTimedBlink.a
+
+LIB_LIST   := $(AUDIO_LIB) $(SERIALFLASH_LIB) $(TIMEDBLINK_LIB) \
 			 $(SPI_LIB) $(SYNTHMDAEPIANO_LIB) $(WIRE_LIB) $(CORE_LIB)
 
 LIBS := -L$(LIBDIR) $(subst ${LIBDIR}/lib,-l,$(LIB_LIST:.a=)) $(LIBS)
@@ -242,7 +246,7 @@ ifneq (${LOCALTEENSY_LIBRARIES},)
 CPPFLAGS += $(addprefix -I${MYTEENSYDUINOPATH}/,${LOCALTEENSY_LIBRARIES})
 endif
 CPPFLAGS += $(addprefix -I${LIBRARYPATH}/,${LIBRARIES})
-CPPFLAGS += $(addprefix -I../../Arduino/libraries/,${USER_LIBRARIES})
+CPPFLAGS += $(addprefix -I${USERLIBPATH}/,${USER_LIBRARIES})
 
 
 # names for the compiler programs
@@ -441,6 +445,21 @@ $(SPI_LIB): $(SPI_OBJS) | ${LIBDIR}
 		$(subst ${HARDWAREROOT}/,,${SPI_LIB_PATH})${CLR}"\n"
 	@$(AR) $(ARFLAGS) $@ $^
 
+TIMEDBLINK_LIB_PATH := ${USERLIBPATH}/TimedBlink/src
+TIMEDBLINK_LIB_CPP_FILES := $(wildcard $(TIMEDBLINK_LIB_PATH)/*.cpp)
+TIMEDBLINK_OBJS := \
+	$(addprefix $(LIBOBJDIR)/,$(notdir $(TIMEDBLINK_LIB_CPP_FILES:.cpp=.o)))
+
+$(LIBOBJDIR)/%.o : ${TIMEDBLINK_LIB_PATH}/%.cpp
+	@echo Compiling $@ from $(subst ${HARDWAREROOT}/,,$<)
+	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
+
+$(TIMEDBLINK_LIB): $(TIMEDBLINK_OBJS) | ${LIBDIR}
+	@echo ${G}"\n"Collecting library $@ from \
+		$(subst ${HARDWAREROOT}/,,${TIMEDBLINK_LIB_PATH})${CLR}"\n"
+	@$(AR) $(ARFLAGS) $@ $^
+
+
 WIRE_LIB_CPP_FILES := Wire.cpp WireIMXRT.cpp WireKinetis.cpp
 WIRE_OBJS := $(addprefix $(LIBOBJDIR)/,$(WIRE_LIB_CPP_FILES:.cpp=.o))
 WIRE_LIB_PATH := ${LIBRARYPATH}/Wire
@@ -455,9 +474,9 @@ $(WIRE_LIB): $(WIRE_OBJS) | ${LIBDIR}
 	@$(AR) $(ARFLAGS) $@ $^
 
 
+SYNTHMDA_LIB_PATH := ${USERLIBPATH}/Synth_MDA_EPiano/src
 SYNTHMDA_LIB_CPP_FILES := mdaEPiano.cpp
 SYNTHMDA_OBJS := $(addprefix $(LIBOBJDIR)/,$(SYNTHMDA_LIB_CPP_FILES:.cpp=.o))
-SYNTHMDA_LIB_PATH := ../../Arduino/libraries/Synth_MDA_EPiano/src
 
 $(LIBOBJDIR)/%.o : ${SYNTHMDA_LIB_PATH}/%.cpp
 	@echo Compiling $@ from $<
@@ -488,7 +507,7 @@ $(CORE_LIB): $(CORE_OBJ) | ${LIBDIR}
 	@$(AR) $(ARFLAGS) $@ $^
 
 get_sample_data get_sample_size: \
-	CINCLUDES += $(addprefix -I../../Arduino/libraries/,${USER_LIBRARIES}) -Ifake_arduino
+	CINCLUDES += $(addprefix -I${USERLIBPATH}/,${USER_LIBRARIES}) -Ifake_arduino
 get_sample_data get_sample_size: \
 	CDEFINES += -DARDUINO_TEENSY40
 
