@@ -304,7 +304,7 @@ $(OBJDIR)/%.o : %.c | ${OBJDIR}
 $(OBJDIR)/%.o : %.cpp | ${OBJDIR}
 	@echo Compiling $@ from $<
 	@echo $@ ${PLATFORM} ${LIBRARIES}
-	$(COMPILE.cpp) $(OUTPUT_OPTION) $<
+	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
 
 # compiler generated dependency info
 # -include $(OBJS:.o=.d)
