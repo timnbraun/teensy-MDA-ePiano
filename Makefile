@@ -97,9 +97,8 @@ CORE    := teensy3
 OPTIONS := -DF_CPU=48000000
 # CPUOPTIONS =  -fsingle-precision-constant
 CPUARCH := cortex-m0plus
-LIBS     += -larm_cortexM0l_math
-# CORE_LIB   = $(LIBDIR)/libteensy-lc.a
-# LIBS     = -L../teensykick/lib -lteensy-lc
+LIBS    += -larm_cortexM0l_math
+
 MCU_LD   = ${COREPATH}/mkl26z64.ld
 MCULDFLAGS = -Wl,--defsym=__rtc_localtime=0
 SPECS    = --specs=nano.specs
@@ -268,9 +267,6 @@ OBJS := $(addprefix ${OBJDIR}/,$(C_FILES:.c=.o) $(CPP_FILES:.cpp=.o))
 # crti.o crtbegin.o crt0.o libm.a libstdc++.a libgcc.a libg.a libc.a
 SYSROOT := ${TOOLSPATH}/teensy-compile/5.4.1/arm/arm-none-eabi/lib/armv7e-m/fpu/fpv5-d16
 SYSLIBROOT := ${TOOLSPATH}/teensy-compile/5.4.1/arm/lib/gcc/arm-none-eabi/5.4.1/armv7e-m/fpu/fpv5-d16
-# CRT_OBJS := -nostdlib -L$(SYSLIBROOT) $(addprefix ${SYSLIBROOT}/,crti.o crtbegin.o) \
-	$(SYSROOT)/crt0.o
-# LIBS += -lm -lstdc++ -lgcc -lg -lc
 
 .PHONY: all load upload size clean allclean
 all: $(addprefix ${BUILDDIR}/,$(TARGET).hex)
@@ -278,7 +274,7 @@ all: $(addprefix ${BUILDDIR}/,$(TARGET).hex)
 # the actual makefile rules (all .o files built by rules using standard COMPILE.x macros)
 
 ${BUILDDIR}/$(TARGET).elf: $(OBJS) ${LIB_LIST} | ${BUILDDIR} $(MCU_LD)
-	@$(LINK.o) ${CPPFLAGS} ${CRT_OBJS} ${OBJS} $(LIBS) -o $@
+	@$(LINK.o) ${CPPFLAGS} ${OBJS} $(LIBS) -o $@
 	@echo built $@ ${GIT_VERSION} for ${PLATFORM}
 
 ${BUILDDIR}/%.hex: ${BUILDDIR}/%.elf
@@ -364,23 +360,23 @@ AUDIO_OBJS := $(addprefix $(LIBOBJDIR)/,$(notdir $(AUDIO_LIB_C_FILES:.c=.o) \
 	$(AUDIO_LIB_CPP_FILES:.cpp=.o) $(AUDIO_LIB_S_FILES:.S=.o)))
 
 $(LIBOBJDIR)/%.o : $(AUDIO_LIB_PATH)/%.c | $(LIBOBJDIR)
-	@echo Compiling $@ from $<
+	@echo Compiling $@ from $(subst ${HARDWAREROOT}/,HARDWARE/,$<)
 	@$(COMPILE.c) -I${AUDIO_LIB_PATH}/utility $(OUTPUT_OPTION) $<
 
 $(LIBOBJDIR)/%.o : $(AUDIO_LIB_PATH)/%.S | $(LIBOBJDIR)
-	@echo Compiling $@ from $<
+	@echo Compiling $@ from $(subst ${HARDWAREROOT}/,HARDWARE/,$<)
 	@$(COMPILE.S) $(OUTPUT_OPTION) $<
 
 $(LIBOBJDIR)/%.o : $(AUDIO_LIB_PATH)/%.cpp | $(LIBOBJDIR)
-	@echo Compiling $@ from $<
+	@echo Compiling $@ from $(subst ${HARDWAREROOT}/,HARDWARE/,$<)
 	@$(COMPILE.cpp) -I${AUDIO_LIB_PATH}/utility $(OUTPUT_OPTION) $<
 
 $(LIBOBJDIR)/%.o : $(AUDIO_LIB_PATH)/utility/%.cpp | $(LIBOBJDIR)
-	@echo Compiling $@ from $<
+	@echo Compiling $@ from $(subst ${HARDWAREROOT}/,HARDWARE/,$<)
 	@$(COMPILE.cpp) $(OUTPUT_OPTION) $<
 
 $(LIBOBJDIR)/%.o : $(AUDIO_LIB_PATH)/utility/%.c | $(LIBOBJDIR)
-	@echo Compiling $@ from $<
+	@echo Compiling $@ from $(subst ${HARDWAREROOT}/,HARDWARE/,$<)
 	@$(COMPILE.c) -I${AUDIO_LIB_PATH}/utility $(OUTPUT_OPTION) $<
 
 $(AUDIO_LIB): $(AUDIO_OBJS) | ${LIBDIR}
